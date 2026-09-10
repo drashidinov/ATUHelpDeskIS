@@ -180,22 +180,102 @@ function todayRu() {
   return JS_DAY_TO_RU[new Date().getDay()];
 }
 
-/* ============ STORAGE HELPERS ============ */
-async function loadCalls() {
+/* ============ STORAGE / BACKEND LAYER ============ */
+// Два режима работы:
+// 1) Превью в Claude — есть window.storage (persistent artifact storage).
+// 2) Реальный хостинг (на вашем сервере) — window.storage нет, работаем
+//    через REST API (см. server/server.js), который отдаётся тем же сервером.
+const hasWidgetStorage = (typeof window !== 'undefined') && !!window.storage
+  && typeof window.storage.get === 'function' && typeof window.storage.set === 'function';
+
+async function getCalls() {
+  if (hasWidgetStorage) {
+    try {
+      const res = await window.storage.get('calls-list', true);
+      return res ? JSON.parse(res.value) : [];
+    } catch (e) {
+      return [];
+    }
+  }
   try {
-    const res = await window.storage.get('calls-list', true);
-    if (!res) return [];
-    return JSON.parse(res.value);
+    const res = await fetch('/api/calls');
+    if (!res.ok) throw new Error('bad status ' + res.status);
+    return await res.json();
   } catch (e) {
+    console.error('getCalls error', e);
     return [];
   }
 }
-async function saveCalls(calls) {
+
+async function addCall(room, buildingName) {
+  if (hasWidgetStorage) {
+    try {
+      const calls = await getCalls();
+      calls.push({
+        id: 'c' + Date.now() + Math.random().toString(36).slice(2,7),
+        room, buildingName, createdAt: Date.now(), status: 'new',
+      });
+      await window.storage.set('calls-list', JSON.stringify(calls), true);
+      return true;
+    } catch (e) {
+      console.error('addCall error', e);
+      return false;
+    }
+  }
   try {
-    await window.storage.set('calls-list', JSON.stringify(calls), true);
+    const res = await fetch('/api/calls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room, buildingName }),
+    });
+    if (!res.ok) throw new Error('bad status ' + res.status);
     return true;
   } catch (e) {
-    console.error('storage error', e);
+    console.error('addCall error', e);
+    return false;
+  }
+}
+
+async function setCallStatus(id, status) {
+  if (hasWidgetStorage) {
+    try {
+      const calls = await getCalls();
+      const idx = calls.findIndex(c => c.id === id);
+      if (idx >= 0) calls[idx].status = status;
+      await window.storage.set('calls-list', JSON.stringify(calls), true);
+      return true;
+    } catch (e) {
+      console.error('setCallStatus error', e);
+      return false;
+    }
+  }
+  try {
+    const res = await fetch('/api/calls/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error('bad status ' + res.status);
+    return true;
+  } catch (e) {
+    console.error('setCallStatus error', e);
+    return false;
+  }
+}
+
+async function clearCalls() {
+  if (hasWidgetStorage) {
+    try {
+      await window.storage.set('calls-list', JSON.stringify([]), true);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  try {
+    const res = await fetch('/api/calls', { method: 'DELETE' });
+    return res.ok;
+  } catch (e) {
     return false;
   }
 }
@@ -283,15 +363,7 @@ function renderTerminal() {
   btn.onclick = async () => {
     btn.disabled = true;
     btn.textContent = 'Отправка…';
-    const calls = await loadCalls();
-    calls.push({
-      id: 'c' + Date.now() + Math.random().toString(36).slice(2,7),
-      room: room.id,
-      buildingName: room.buildingName,
-      createdAt: Date.now(),
-      status: 'new',
-    });
-    const ok = await saveCalls(calls);
+    const ok = await addCall(room.id, room.buildingName);
     if (ok) {
       callSentFor = room.id;
     } else {
@@ -398,13 +470,12 @@ function renderBoard() {
     const id = btn.dataset.id;
     const act = btn.dataset.act;
     btn.disabled = true;
-    const calls = await loadCalls();
-    const idx = calls.findIndex(c=>c.id===id);
-    if (idx >= 0) {
-      calls[idx].status = act === 'accept' ? 'accepted' : 'closed';
-      await saveCalls(calls);
-      callsCache = calls;
+    const ok = await setCallStatus(id, act === 'accept' ? 'accepted' : 'closed');
+    if (ok) {
+      callsCache = await getCalls();
       render();
+    } else {
+      btn.disabled = false;
     }
   });
 
@@ -413,7 +484,7 @@ function renderBoard() {
   resetWrap.innerHTML = `<button id="reset-btn">Очистить все вызовы</button>`;
   wrap.appendChild(resetWrap);
   resetWrap.querySelector('button').onclick = async () => {
-    await saveCalls([]);
+    await clearCalls();
     callsCache = [];
     render();
   };
@@ -423,7 +494,7 @@ function renderBoard() {
 
 /* ============ POLLING ============ */
 async function refreshCalls() {
-  callsCache = await loadCalls();
+  callsCache = await getCalls();
   if (view === 'board') render();
 }
 refreshCalls();

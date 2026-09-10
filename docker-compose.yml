@@ -1,0 +1,11 @@
+services:
+  helpdesk:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - helpdesk_data:/app/server/data
+    restart: unless-stopped
+
+volumes:
+  helpdesk_data:

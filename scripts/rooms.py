@@ -43,7 +43,7 @@ if __name__ == "__main__":
 import re
 
 # Matches like 304-2Б, 401-2C, 405 2с, 304а-2Б etc.
-RE_BLD = re.compile(r'(\d{3,4}[аА]?)\s*-?\s*(2[БCСбс])\b')
+RE_BLD = re.compile(r'(\d{3,4}[аА]?)\s*-?\s*(2\s*-?\s*)?([БCСбс])\b')
 # Matches like 508 ГУК, ГУК 510, 508ГУК
 RE_GUK = re.compile(r'(\d{3})\s*ГУК|ГУК\s*(\d{3})', re.IGNORECASE)
 
@@ -53,8 +53,8 @@ def find_target_rooms_in_text(text: str):
         return []
     found = []
     for m in RE_BLD.finditer(text):
-        num, bld = m.group(1), m.group(2)
-        token = f"{num}-{bld}"
+        num, letter = m.group(1), m.group(3)
+        token = f"{num}-2{letter}"  # canonical form; '2' prefix optional in source, normalized here
         norm = normalize(token)
         if norm in NORM_TO_RAW:
             found.append(NORM_TO_RAW[norm])

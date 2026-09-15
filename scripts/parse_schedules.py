@@ -1,17 +1,30 @@
 import openpyxl, glob, json, re, sys
-sys.path.insert(0, '/home/claude/parse')
+sys.path.insert(0, '/home/claude/parse2')
 from rooms import find_target_rooms_in_text, ALL_ROOMS
 
 UPLOAD_DIR = "/mnt/user-data/uploads"
 
+FILES = [
+    "2_курс_ФИиИТ_ФИиИС_Расписание_1_академического_периода_2026-2027уч_года.xlsx",
+    "2_курс_ФПТ_ФБиХТ_Расписание_1_академического_периода_2026-2027_уч_г_.xlsx",
+    "2курс_ФДТТиО_ФЭиБ_РАСПИСАНИЕ_2026-2027_уч_г.xlsx",
+    "3_курс_2026-2027.xlsx",
+    "4_курс_расписание_2026-2027_г_14_09.xlsx",
+    "МАГИСТРАТУРА_1_КУРС_ПРОФИЛЬНОЕ_НАПР__2026-2027_г_.xlsx",
+    "Расписание_докторантов_1_курс__1_.xlsx",
+    "Расписание_магистрантов_1_КУРС_НАУЧНО-ПЕД__НАПРАВЛЕНИЕ__2026-2027_уч_г_.xlsx",
+    "Расписание_магистрантов_2_курс.xlsx",
+    "1г_о__ТИПО_ВО_2курс_ФДТТиО_ФЭиБ_РАСПИСАНИЕ_2026-2027_уч_г_ТИПО.xlsx",
+    "ТИПО_3года__ВО_3года2_курс_ФПТ_ФБиХТ_ФИиИТ_ФИиИС_Расписание_1_академического_периода_2026-2027_уч_г_.xlsx",
+    "14_09_Г_Ж_1_курс_2026-2027_ФПТ_ФБиХТ__1_.xlsx",
+    "14_09_Г_Ж_1_курс_2026-2027_Фэб_фдтио_Фиит.xlsx",
+]
+
 def get_header_fill_map(ws, header_row_idx, max_col):
-    """Map column index -> header text, accounting for merged cells in header row."""
     fill = {}
-    # base values
     for c in range(1, max_col+1):
         v = ws.cell(row=header_row_idx, column=c).value
         fill[c] = v
-    # apply merges that touch header_row
     for mc in ws.merged_cells.ranges:
         if mc.min_row <= header_row_idx <= mc.max_row:
             top_val = ws.cell(row=mc.min_row, column=mc.min_col).value
@@ -24,14 +37,13 @@ def clean_group_name(g):
     if not g:
         return None
     g = str(g).strip()
-    g = re.sub(r'\s*\(\d+\)\s*$', '', g)  # strip trailing (30) student count
+    g = re.sub(r'\s*\(\d+\)\s*$', '', g)
     return g.strip()
 
 records = []
-files = glob.glob(f"{UPLOAD_DIR}/*.xlsx")
 
-for fpath in files:
-    fname = fpath.split('/')[-1]
+for fname in FILES:
+    fpath = f"{UPLOAD_DIR}/{fname}"
     try:
         wb = openpyxl.load_workbook(fpath, data_only=True)
     except Exception as e:
@@ -43,9 +55,8 @@ for fpath in files:
         max_col = ws.max_column
         if max_row is None or max_row < 3:
             continue
-        # find header row: a row with a cell containing 'ремя' (Время) in col A or B within first 10 rows
         header_row = None
-        for r in range(1, min(12, max_row)+1):
+        for r in range(1, min(15, max_row)+1):
             for c in range(1, min(4, max_col)+1):
                 v = ws.cell(row=r, column=c).value
                 if isinstance(v, str) and ('ремя' in v or 'ақыт' in v):
@@ -88,7 +99,7 @@ for fpath in files:
     wb.close()
     print("done", fname, "records so far:", len(records))
 
-with open('/home/claude/parse/records.json', 'w', encoding='utf-8') as f:
+with open('/home/claude/parse2/records.json', 'w', encoding='utf-8') as f:
     json.dump(records, f, ensure_ascii=False, indent=1)
 
 print("TOTAL RECORDS:", len(records))

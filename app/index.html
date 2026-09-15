@@ -183,6 +183,7 @@
   .cc-session:first-of-type { border-top: none; }
   .cc-session .t { width: 82px; flex-shrink: 0; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
   .cc-session .info { line-height: 1.4; }
+  .cc-session .group { color: var(--ink-soft); font-size: 12px; margin-top: 2px; }
   .cc-session .room-tag { color: var(--ink-soft); font-size: 12px; }
 </style>
 </head>
@@ -681,6 +682,7 @@ function renderConflicts() {
           <div class="t">${s.time}</div>
           <div>
             <div class="info">${s.info}</div>
+            ${s.group ? `<div class="group">${s.group}</div>` : ''}
             ${keyLabel==='Преподаватель' ? `<div class="room-tag">Ауд. ${s.room}</div>` : ''}
           </div>
         </div>
